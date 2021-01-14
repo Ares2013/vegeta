@@ -3,6 +3,7 @@ package vegeta
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -356,5 +358,38 @@ func TestClient(t *testing.T) {
 	resp := atk.hit(tr, "TEST")
 	if !strings.Contains(resp.Error, "Client.Timeout exceeded while awaiting headers") {
 		t.Errorf("Expected timeout error")
+	}
+}
+
+func TestVegetaHeaders(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(r.Header)
+		}),
+	)
+
+	defer server.Close()
+
+	tr := NewStaticTargeter(Target{Method: "GET", URL: server.URL})
+	atk := NewAttacker()
+
+	for seq := 0; seq < 5; seq++ {
+		attack := "big-bang"
+		res := atk.hit(tr, attack)
+
+		var hdr http.Header
+		if err := json.Unmarshal(res.Body, &hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		if have, want := hdr.Get("X-Vegeta-Attack"), attack; have != want {
+			t.Errorf("X-Vegeta-Attack: have %q, want %q", have, want)
+		}
+
+		if have, want := hdr.Get("X-Vegeta-Seq"), strconv.Itoa(seq); have != want {
+			t.Errorf("X-Vegeta-Seq: have %q, want %q", have, want)
+		}
 	}
 }

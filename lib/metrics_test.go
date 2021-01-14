@@ -1,6 +1,7 @@
 package vegeta
 
 import (
+	"io/ioutil"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -47,6 +48,7 @@ func TestMetrics_Add(t *testing.T) {
 			P95:       duration("9.5005ms"),
 			P99:       duration("9.9005ms"),
 			Max:       duration("10ms"),
+			Min:       duration("1us"),
 			estimator: got.Latencies.estimator,
 		},
 		BytesIn:     ByteMetrics{Total: 10240000, Mean: 1024},
@@ -98,6 +100,18 @@ func TestMetrics_NonNilErrorsOnClose(t *testing.T) {
 	}
 }
 
+// https://github.com/tsenart/vegeta/issues/461
+func TestMetrics_EmptyMetricsCanBeReported(t *testing.T) {
+	t.Parallel()
+
+	var m Metrics
+	m.Close()
+
+	reporter := NewJSONReporter(&m)
+	if err := reporter(ioutil.Discard); err != nil {
+		t.Error(err)
+	}
+}
 func BenchmarkMetrics(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
